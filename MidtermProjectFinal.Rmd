@@ -1,0 +1,178 @@
+---
+title: "Toronto Raptors Shot Chart Report"
+author: "Lucas Strauss"
+date: "2025-04-03"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, include=FALSE}
+library(nbastatR)
+library(tidyverse)
+library(ggplot2)
+library(ggimage)
+library(png)
+library(ggpubr)
+library(knitr)
+Sys.setenv("VROOM_CONNECTION_SIZE"=131072*5)
+```
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+#Creating and transforming dataframe
+court <- readPNG("court.png") #Reading in background image
+cool_colors <- c("#BA0C2F","black") #Changing theme colors to match Toronto Raptors colors
+raptorsAll <- teams_shots(teams="Toronto Raptors", seasons = 2003) #First season defined directly to establish column names
+for(x in 1:7) { #For loop used to add each season to one large dataframe (raptorsAll)
+  raptors = teams_shots(teams="Toronto Raptors", seasons = (2003+3*x)) #Gather every third season for the dataframe
+  raptorsAll <- bind_rows(raptorsAll, raptors)
+}
+  raptorsAll <- mutate(raptorsAll, isShotMade = as.factor(isShotMade)) %>% #Changing isShotMade to factor to change the legend
+  mutate(isShotMade = recode(isShotMade, "TRUE"="Made", "FALSE"="Missed")) %>% #Change names so the legend will say Made or Missed instead
+  mutate(isShotMade = factor(isShotMade, levels=c("Made", "Missed"))) #Establish levels so Made shots come first
+```
+
+```{r, fig.width=12, fig.height=7, echo=FALSE, warning=FALSE}
+#Creating the shot chart
+bball <- ggplot(data=raptorsAll, mapping = aes(x=locationX, y=locationY)) +
+  background_image(court) + #Set background image to basketball court
+  geom_point(aes(color=isShotMade), alpha=.2, size=.5, show.legend = TRUE) + #Create points for each shot separated into made and missed shots by color
+  scale_x_continuous(limits=c(-250,250), breaks=NULL, expand=c(0,0)) + #Set the dimensions of baskeball court
+  scale_y_continuous(limits=c(-40, 470), breaks=NULL, expand=c(0,0)) +
+  labs(title = "Toronto Raptors Shot Charts", x="", y="", color="") + #Create title and get rid of axis and legend labels for clarity
+  theme_minimal() +
+  scale_color_manual(values=cool_colors) + #Set colors to Toronto Raptors colors
+  facet_wrap(~yearSeason, nrow=2) + #Facet each shot chart by year
+  guides(color = guide_legend(override.aes = list(size=3))) + #Increase the size of the dots in the legend
+  theme(title = element_text(size=16), axis.text = element_blank(), legend.text = element_text(size=16), strip.text = element_text(size=14)) #Adjust sizes of labels for clarity
+bball
+
+```
+
+
+- Shot charts were taken in three year intervals to demonstrate the evolution of the game
+
+- Shot selection has changed tremendously over the past twenty years
+
+- Midrange shots have virtually disappeared from outside the paint
+
+- Three point shots and layups are far more common
+
+- Three point shots from farther away are becoming more common
+
+- The paint is utilized much more than in the past
+
+- The baseline is rarely used anymore compared to the early 2000s
+
+\newpage
+
+## Detailed Report
+
+- Shot charts were taken in three year intervals to demonstrate the evolution of the game
+  - A range of twenty-two years is displayed
+  - Red dots represent made shots while black dots represent missed shots
+  - Each year has around 7000 data points so total density remains relatively consistent across years
+- Shot selection has changed dramatically over the past twenty years
+  - This is easily seen by the dot density changing locations over the years
+  - The changes appear very gradually, which is why a range of twenty-two years is necessary
+- Mid range shots have virtually disappeared from outside the paint
+  - Shot density has moved away from mid range shots (i.e. just inside the three point line)
+  - This makes sense because these shots have the lowest number of points per shot
+- Three point shots and layups are far more common
+  - This demonstrates smart decisions by teams by focusing more on easier shots or shots worth more
+- Three point shots from farther away are becoming more common
+  - This could be an effect of a stronger emphasis on three point shots
+  - This could also be an effect of the NBA players attempting to be more stylistic to gain popularity
+- The paint is utilized much more than in the past
+  - Shot density shows a larger emphasis on paint play
+  - This could be an effect of high skilled centers becoming more common
+- The baseline is rarely used anymore compared to the early 2000s
+  - Shots have transitioned away from the baseline
+  - This makes sense because shots from near the baseline have a lower probability of makes
+
+\newpage
+
+## Four Point Shot
+
+- As shots farther from the basket become more common, it is natural to think about a four point shot line
+- To determine where the line should be placed, we must look at shot data across the NBA for two and three point shots from the last five years:
+
+
+```{r, echo=FALSE, include=FALSE}
+#Gleaning data for statistical and grpahical analysis of different shot types
+numBins <- 30 #Set the number of bins for the chart later on
+nbaLastFive <- teams_shots(all_active_teams = TRUE, seasons = 2020) #Initialize the dataframe with one year's data
+for(x in 2021:2024) { #For loop used to add each season to the dataframe
+  newYear = teams_shots(all_active_teams = TRUE, seasons = x)
+  nbaLastFive <- bind_rows(nbaLastFive, newYear)
+}
+
+#Modify dataframe to include data needed for later analysis
+nbaLastFive <- nbaLastFive %>%
+  mutate(ShotDistance=sqrt(locationX*locationX+locationY*locationY)/10) %>% #Adding a column calculating distance from rim using Pythagorean Theorem
+  mutate(Points = ifelse(typeShot=="2PT Field Goal", 2, 3)) %>% #Adding numerical value to type of shot
+  mutate(bin = cut(ShotDistance, breaks=numBins, labels=FALSE)) #Separating shots into bins based on distance. This is needed to calculate the shot percentage at different distances
+```
+
+
+```{r, echo=FALSE}
+#Creating a table to display meaningful statistics on two and three point shots
+shotTable <- nbaLastFive %>%
+  group_by(typeShot) %>% #Separating data into two and three point shots
+  summarize(NumShots = n(), #Total number of shots
+            PercentMade=sum(isShotMade==TRUE)/n(), #Field goal percentage
+            PointsPerShot=mean(Points)*sum(isShotMade==TRUE)/n(), #Average number of points per shot
+            AvgDistShot=mean(ShotDistance)) #Average shot distance from the basket
+  kable(shotTable) #Making a polished graph to display
+```
+
+
+- This data demonstrates that the points per shot for two and three point shots are roughly the same (around 1.075)
+- Thus, the four point shot should then also have a points per shot value around 1.075
+- This would require the shot percentage to be around 27%
+- To find a good distance to place the line, we can look at shot percentages at different distances
+
+
+```{r, echo=FALSE}
+#Creating dataframe of shot percentages at different distances
+shotPercentBinned <- nbaLastFive %>%
+  group_by(bin) %>% #Grouping by shot distance intervals created earlier
+  summarize(shotAverage=mean(isShotMade)) %>% #Creating a shot average for each interval
+  mutate(bin=bin*(max(nbaLastFive$ShotDistance)/numBins)) #Making the bin values correctly represent the distances by making it a fraction of the total number of bins and multiplying that by the maximum shot distance
+
+#Creating the plot of field goal percentage over different distances
+shotPercents <- ggplot(shotPercentBinned, mapping=aes(x=bin, y=shotAverage)) +
+  geom_smooth(stat="identity", color="#BA0C2F") + #Line created without any statistical transformation to directly represent data
+  labs(x="Shot Distance (ft)", y="Field Goal Percentage", title="Field Goal Percentage at Different Distances") +
+  theme_minimal() +
+  geom_hline(yintercept=.27) #Horizontal line representing the targeted 27% shot percentage
+shotPercents
+```
+
+
+- This graph shows an intersection of 26% field goal percentage at around 34 feet
+- However, after 34 ft, the field goal percentage drops sharply
+- To average out the field goal percentage, we can move the line slightly closer to 32 ft
+- The line would look like this:
+
+```{r, echo=FALSE, message=FALSE}
+#Creating points with distance of 32 ft away
+fourPointLine <- data.frame(x=-250:250) %>% 
+  mutate(y=sqrt((320*320)-(x*x))) #Using Pythagorean Theorem to place points with a distance of 32 ft
+
+newCourt <- ggplot(fourPointLine, mapping=aes(x,y)) +
+  background_image(court) + #Set background image to basketball court
+  geom_smooth(color="black") +
+  scale_x_continuous(limits=c(-250,250), breaks=NULL, expand=c(0,0)) + #Set the dimensions of baskeball court
+  scale_y_continuous(limits=c(-40, 470), breaks=NULL, expand=c(0,0)) +
+  labs(title = "", x="", y="") + #Create title and get rid of axis and legend labels for clarity
+  theme_minimal()
+newCourt
+```
+
+
+- This line would significantly shift the average distance of shots across the league
+- If the points per shot is consistent as calculated, the total points per game should not change too much
+- However, possessions might become much shorter, as quick four point shots become more common
